@@ -1,0 +1,241 @@
+@import "tailwindcss";
+
+/* Token shadcn-style: utility Tailwind (bg-card, text-muted-foreground, dst.)
+   membaca variabel CSS yang berganti per atribut data-theme di <html>. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-header: var(--header);
+  --color-header-foreground: var(--header-foreground);
+}
+
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --background: #f4f5f7;
+  --foreground: #1f2937;
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --primary: #f97316;
+  --primary-foreground: #ffffff;
+  --muted: #f3f4f6;
+  --muted-foreground: #6b7280;
+  --border: #e5e7eb;
+  --destructive: #dc2626;
+  --header: #111827;
+  --header-foreground: #f9fafb;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #0f1115;
+  --foreground: #e5e7eb;
+  --card: #171a21;
+  --card-foreground: #e5e7eb;
+  --primary: #fb923c;
+  --primary-foreground: #14161a;
+  --muted: #1f2430;
+  --muted-foreground: #9ca3af;
+  --border: #2a2f3a;
+  --destructive: #f87171;
+  --header: #0b0d11;
+  --header-foreground: #e5e7eb;
+}
+
+[data-theme='brand'] {
+  color-scheme: light;
+  --background: #faf6f0;
+  --foreground: #3f2d1e;
+  --card: #fffdfa;
+  --card-foreground: #3f2d1e;
+  --primary: #c2410c;
+  --primary-foreground: #fff7ed;
+  --muted: #f1e9de;
+  --muted-foreground: #8a7461;
+  --border: #e7dbcb;
+  --destructive: #b91c1c;
+  --header: #442f1f;
+  --header-foreground: #f6ede2;
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    @apply rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/25;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--primary);
+  }
+}
+
+/* Utility komponen yang dipakai berulang; semua membaca token tema. */
+@utility btn-primary {
+  @apply rounded-lg bg-primary px-4 py-2.5 font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50;
+}
+
+@utility btn-dark {
+  @apply rounded-lg bg-foreground px-4 py-2.5 font-semibold text-background hover:opacity-90 disabled:opacity-50;
+}
+
+@utility btn-ghost {
+  @apply rounded-lg bg-muted px-4 py-2.5 font-semibold text-foreground hover:bg-border;
+}
+
+@utility btn-sm {
+  @apply rounded-lg px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50;
+}
+
+@utility card {
+  @apply rounded-xl bg-card p-4 text-card-foreground shadow;
+}
+
+@utility muted {
+  @apply text-sm text-muted-foreground;
+}
+
+@utility rp {
+  @apply tabular-nums;
+}
+
+@utility toast-msg {
+  @apply fixed right-6 bottom-6 z-50 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg;
+}
+
+@utility modal-backdrop {
+  /* z-50 = di atas bottom-sheet nota (juga z-50) — modal bayar/riwayat tidak boleh tertutup sheet. */
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-black/60;
+}
+
+@utility modal {
+  @apply max-h-[88vh] w-[min(560px,92vw)] overflow-auto rounded-2xl bg-card p-5 text-card-foreground;
+}
+
+/* Bottom sheet modern (mobile-first): panel nota/keranjang yang menaik dari bawah. */
+@utility sheet-backdrop {
+  @apply fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center;
+}
+
+@utility sheet {
+  @apply flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-card text-card-foreground shadow-2xl sm:max-h-[86vh] sm:w-[min(520px,94vw)] sm:rounded-3xl;
+}
+
+/* Cetak laporan: tanpa chrome aplikasi, hitam-putih, tabel lebar ikut tercetak penuh. */
+@media print {
+  aside,
+  header,
+  button,
+  .no-print,
+  .toast-msg,
+  .modal-backdrop {
+    display: none !important;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  .card {
+    border: 1px solid #ddd;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+}
+
+/* Cetak bill per nota: hanya .print-bill-area yang keluar di kertas. */
+.print-bill-area {
+  display: none;
+}
+
+@media print {
+  body.printing-bill .print-bill-area {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000;
+    /* Jarak aman tepi kertas thermal 58mm. */
+    padding: 2mm 3mm;
+  }
+
+  body.printing-bill * {
+    visibility: hidden;
+  }
+
+  body.printing-bill .print-bill-area,
+  body.printing-bill .print-bill-area * {
+    visibility: visible;
+  }
+}
+
+/* Cetak stiker QR meja: hanya .print-qr-area yang keluar di kertas. */
+.print-qr-area {
+  display: none;
+}
+
+@media print {
+  body.printing-qr .print-qr-area {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000;
+    text-align: center;
+  }
+
+  body.printing-qr * {
+    visibility: hidden;
+  }
+
+  body.printing-qr .print-qr-area,
+  body.printing-qr .print-qr-area * {
+    visibility: visible;
+  }
+}
+
+/* Animasi topping: ikon "pop" muncul di preview saat dicentang. */
+.topping-pop-enter-active {
+  animation: topping-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.topping-pop-leave-active {
+  animation: topping-pop 0.25s reverse;
+}
+@keyframes topping-pop {
+  0% {
+    transform: scale(0) rotate(-20deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
