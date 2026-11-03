@@ -7,4 +7,12 @@ const api = axios.create({
   withXSRFToken: true,
 })
 
+// Toko aktif (Cara B): backend memvalidasi keanggotaan user terhadap header ini —
+// semua baca/tulis data toko mengikuti pilihan switcher di header.
+api.interceptors.request.use((config) => {
+  const storeId = localStorage.getItem('activeStoreId')
+  if (storeId) config.headers['X-Store-Id'] = storeId
+  return config
+})
+
 export default api

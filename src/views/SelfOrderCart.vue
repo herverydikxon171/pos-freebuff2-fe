@@ -18,6 +18,7 @@ let timer
 // --- Bayar langsung dari HP (QRIS Midtrans) ---
 const payState = ref(null) // null | 'qr' | 'paid' | 'expired' | 'failed'
 const qrImage = ref('')
+const qrUrl = ref('') // URL QR Midtrans — bisa disalin (kebutuhan simulator)
 const grossAmount = ref(0)
 const payBusy = ref(false)
 let pollTimer
@@ -77,6 +78,7 @@ async function startPay() {
       return
     }
     qrImage.value = data.qr_image
+    qrUrl.value = data.qr_url ?? ''
     grossAmount.value = data.gross_amount
     payState.value = 'qr'
     startPoll()
@@ -84,6 +86,30 @@ async function startPay() {
     showToast(e.response?.data?.message || 'Gagal membuat QR pembayaran.', true)
   } finally {
     payBusy.value = false
+  }
+}
+
+// Salin URL QR Midtrans — untuk simulator/penguji pembayaran.
+async function copyQrisUrl() {
+  try {
+    await navigator.clipboard.writeText(qrUrl.value)
+    showToast('URL QR disalin ✓')
+    return
+  } catch {
+    /* clipboard API ditolak (permission/context) → fallback textarea */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = qrUrl.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+    showToast('URL QR disalin ✓')
+  } catch {
+    showToast('Gagal menyalin — klik kolom lalu salin manual.', true)
   }
 }
 
@@ -197,6 +223,17 @@ onUnmounted(() => {
               alt="QRIS"
               class="mx-auto my-3 h-56 w-56 rounded-xl border border-border bg-white p-2"
             />
+            <!-- URL QR Midtrans: disalin untuk simulator/penguji pembayaran. -->
+            <div v-if="qrUrl" class="mb-3 flex items-center gap-1.5">
+              <input
+                :value="qrUrl"
+                readonly
+                aria-label="URL QR Midtrans"
+                class="min-w-0 flex-1 rounded border border-border bg-muted px-2 py-1 font-mono text-xs"
+                @focus="$event.target.select()"
+              />
+              <button class="btn-ghost btn-sm shrink-0" type="button" @click="copyQrisUrl">Salin</button>
+            </div>
             <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <span class="h-2 w-2 animate-pulse rounded-full bg-primary"></span>
               Menunggu pembayaran…

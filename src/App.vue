@@ -62,18 +62,22 @@ const menu = [
   { to: 'shifts', icon: '🕐', label: 'Shift' },
   { to: 'tables', icon: '🪑', label: 'Meja' },
   { to: 'ingredients', icon: '🧂', label: 'Bahan' },
+  { to: 'stores', icon: '🏪', label: 'Toko' },
+  { to: 'users', icon: '👥', label: 'Pengguna' },
 ]
 
-// RBAC: role karyawan yang boleh melihat tiap menu sidebar.
-const menuRoles = {
-  pos: ['admin', 'cashier', 'manager'],
-  kds: ['admin', 'kitchen', 'manager'],
-  reports: ['admin', 'manager'],
-  shifts: ['admin', 'cashier', 'manager'],
-  tables: ['admin'],
-  ingredients: ['admin'],
+// RBAC: izin toko aktif yang boleh melihat tiap menu sidebar (Cara B, Tahap 2).
+const menuPerms = {
+  pos: 'pos',
+  kds: 'kds',
+  reports: 'reports',
+  shifts: 'shift',
+  tables: 'tables',
+  ingredients: 'ingredients',
+  stores: 'stores',
+  users: 'users',
 }
-const visibleMenu = computed(() => menu.filter((m) => (menuRoles[m.to] ?? []).includes(auth.user?.role)))
+const visibleMenu = computed(() => menu.filter((m) => auth.has(menuPerms[m.to])))
 
 const sideClass = (name) =>
   route.name === name
@@ -85,6 +89,10 @@ function cycleTheme() {
   const next = THEMES[(i + 1) % THEMES.length]
   theme.value = next.id
   setTheme(next.id)
+}
+
+function onStoreChange(e) {
+  auth.setActiveStore(Number(e.target.value))
 }
 
 async function doLogout() {
@@ -112,7 +120,7 @@ async function doLogout() {
     >
       <div class="flex items-center justify-between px-4 py-3.5 text-base font-bold">
         <button
-          v-if="auth.user?.role === 'admin'"
+          v-if="auth.has('menu')"
           type="button"
           class="flex min-w-0 items-center gap-2 rounded-lg px-1 py-0.5 font-bold hover:bg-white/10"
           title="Klik untuk mengganti logo struk"
@@ -130,7 +138,7 @@ async function doLogout() {
         <RouterLink v-for="m in visibleMenu" :key="m.to" :to="{ name: m.to }" :class="sideClass(m.to)">
           <span>{{ m.icon }}</span> {{ m.label }}
         </RouterLink>
-        <RouterLink v-if="auth.user?.role === 'admin'" :to="{ name: 'admin' }" :class="sideClass('admin')">
+        <RouterLink v-if="auth.has('menu')" :to="{ name: 'admin' }" :class="sideClass('admin')">
           <span>✏️</span> Menu
         </RouterLink>
       </nav>
@@ -149,6 +157,16 @@ async function doLogout() {
           ☰
         </button>
         <div class="ml-auto flex items-center gap-3 md:ml-0">
+          <!-- Pemilih toko aktif (Cara B) — tampil bila user ditugasi di >1 toko. -->
+          <select
+            v-if="auth.stores.length > 1"
+            class="rounded-lg border border-border bg-card px-2 py-1.5 text-sm text-foreground"
+            :value="auth.storeId"
+            title="Ganti toko aktif"
+            @change="onStoreChange"
+          >
+            <option v-for="s in auth.stores" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
           <button
             class="rounded-lg border border-border px-2.5 py-1.5 text-sm hover:bg-muted"
             :title="'Tema: ' + (THEMES.find((t) => t.id === theme)?.label ?? theme)"

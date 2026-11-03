@@ -136,14 +136,16 @@ async function submitPay() {
   }
 }
 
-// --- QRIS: pilih metode QRIS → Bayar → modal QR + waktu tunggu → lunas otomatis ---
+// --- QRIS: pilih metode QRIS → Bayar → modal QR + hitung mundur → lunas otomatis ---
 const qrisImg = ref('')
+const qrisUrl = ref('') // URL QR Midtrans — bisa disalin (kebutuhan simulator)
 const qrisAmount = ref(0)
 const qrisBusy = ref(false)
-const qrisElapsed = ref('00:00')
+const qrisCountdown = ref('15:00') // sisa waktu QR sebelum kedaluwarsa
 let qrisTimer // poll status nota
-let qrisClock // penghitung waktu tunggu (detik)
-let qrisSince = 0
+let qrisClock // penghitung mundur (detik)
+let qrisDeadline = 0 // epoch ms waktu kedaluwarsa dari server
+let qrisExpiredTick = false // cek status sekali saat menyentuh 00:00
 
 function stopQrisPoll() {
   if (qrisTimer) {
@@ -159,6 +161,7 @@ function stopQrisPoll() {
 function hideQris() {
   stopQrisPoll()
   qrisImg.value = ''
+  qrisUrl.value = ''
 }
 
 const qrisCancelBusy = ref(false)
@@ -178,14 +181,22 @@ async function cancelQris() {
   }
 }
 
-function startQrisClock() {
-  qrisSince = Date.now()
-  qrisElapsed.value = '00:00'
+// Hitung mundur ke expiry_time dari server; menyentuh 00:00 → sinkronkan status segera.
+function startQrisClock(expiresAt) {
+  qrisDeadline =
+    (Number(expiresAt) > 0 ? Number(expiresAt) : Math.floor(Date.now() / 1000) + 15 * 60) * 1000
+  qrisExpiredTick = false
+  const tick = () => {
+    const left = Math.max(0, Math.round((qrisDeadline - Date.now()) / 1000))
+    qrisCountdown.value = `${String(Math.floor(left / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}`
+    if (left === 0 && !qrisExpiredTick) {
+      qrisExpiredTick = true
+      checkQris()
+    }
+  }
+  tick()
   if (qrisClock) clearInterval(qrisClock)
-  qrisClock = setInterval(() => {
-    const s = Math.floor((Date.now() - qrisSince) / 1000)
-    qrisElapsed.value = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-  }, 1000)
+  qrisClock = setInterval(tick, 1000)
 }
 
 // Sudah lunas — tutup modal & tampilkan halaman berhasil.
@@ -220,8 +231,9 @@ async function openQrisModal() {
     }
     qrisAmount.value = data.gross_amount ?? sisa.value
     qrisImg.value = data.qr_image
+    qrisUrl.value = data.qr_url ?? ''
     stopQrisPoll() // bersihkan dulu — baru nyalakan jam & polling
-    startQrisClock()
+    startQrisClock(data.expires_at)
     qrisTimer = setInterval(checkQris, 3000)
   } catch (e) {
     showToast(e.response?.data?.message || 'Gagal membuat QR QRIS.', true)
@@ -230,11 +242,36 @@ async function openQrisModal() {
   }
 }
 
-// Poll status nota — webhook Midtrans menandai lunas, modal tertutup sendiri.
+// Salin URL QR Midtrans — untuk simulator/penguji pembayaran.
+async function copyQrisUrl() {
+  try {
+    await navigator.clipboard.writeText(qrisUrl.value)
+    showToast('URL QR disalin ✓')
+    return
+  } catch {
+    /* clipboard API ditolak (permission/context) → fallback textarea */
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = qrisUrl.value
+    ta.style.position = 'fixed'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    ta.remove()
+    showToast('URL QR disalin ✓')
+  } catch {
+    showToast('Gagal menyalin — klik kolom lalu salin manual.', true)
+  }
+}
+
+// Poll status QRIS — server ikut mengecek Midtrans, jadi lunas walau webhook tak terjangkau.
 async function checkQris() {
   try {
-    const o = await fetchOrder()
-    if (o.payment_status === 'paid') await finishPaid(o)
+    const { data } = await api.get(`/api/orders/${order.value.id}/qris/status`)
+    const o = data.order
+    if (data.status === 'paid' || o.payment_status === 'paid') await finishPaid(o)
     else if (o.payment_status === 'partial') {
       // QRIS menutup sebagian → tutup modal, sisanya bisa dibayar metode lain.
       hideQris()
@@ -243,6 +280,11 @@ async function checkQris() {
     } else if (o.voided_at) {
       hideQris()
       showToast('Nota dibatalkan — QR ditutup.', true)
+    } else if (data.status === 'failed' || data.status === 'expired') {
+      // QR mati di Midtrans (kedaluwarsa/dibatalkan) — tutup & tawarkan QR baru.
+      hideQris()
+      await fetchOrder()
+      showToast('QRIS kedaluwarsa — tekan Selesai Bayar untuk QR baru.', true)
     }
   } catch {
     /* gangguan sesaat — biarkan polling jalan */
@@ -466,12 +508,29 @@ function goPos() {
         <div class="rp my-1 text-2xl font-bold text-primary">{{ rp(qrisAmount) }}</div>
         <img :src="qrisImg" alt="QRIS" class="mx-auto h-56 w-56" />
         <div class="muted mt-1.5 text-xs">
-          ⏳ Menunggu pembayaran
-          <span class="font-semibold tabular-nums">{{ qrisElapsed }}</span>
+          ⏳ Menunggu pembayaran · sisa
+          <span
+            class="font-semibold tabular-nums"
+            :class="{ 'text-destructive': qrisCountdown === '00:00' }"
+          >
+            {{ qrisCountdown }}
+          </span>
         </div>
         <p class="muted mt-1 text-xs">
-          Modal tertutup &amp; halaman berhasil tampil otomatis begitu pelanggan bayar.
+          Modal tertutup &amp; halaman berhasil tampil otomatis begitu pelanggan bayar; QR
+          kedaluwarsa saat hitung mundur habis.
         </p>
+        <!-- URL QR Midtrans: disalin untuk simulator/penguji pembayaran. -->
+        <div v-if="qrisUrl" class="mt-2 flex items-center gap-1.5">
+          <input
+            :value="qrisUrl"
+            readonly
+            aria-label="URL QR Midtrans"
+            class="min-w-0 flex-1 rounded border border-border bg-muted px-2 py-1 text-left font-mono text-xs"
+            @focus="$event.target.select()"
+          />
+          <button class="btn-ghost btn-sm shrink-0" type="button" @click="copyQrisUrl">Salin</button>
+        </div>
         <button class="btn-ghost btn-sm mt-3" :disabled="qrisCancelBusy" @click="cancelQris">
           {{ qrisCancelBusy ? 'Membatalkan…' : 'Batalkan QR' }}
         </button>
